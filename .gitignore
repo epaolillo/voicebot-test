@@ -1,0 +1,8 @@
+build/
+dist/
+vendor/
+piper/
+models/
+*.o
+*.tar.gz
+.env

@@ -1,0 +1,29 @@
+---
+alwaysApply: true
+---
+
+Stack tecnologico:
+
+* Todo desarrollado en C++
+* Whisper A travez de OpenAI
+* LLM a travez de OpenAI
+* Escucha de mic: Comprimir y reducir ancho de banda a calidad telefonica
+* Reduccion de ruido
+* PiperTTS (Voz argentina)
+
+# Priorizar la reduccion de latencia
+
+# Separar el codigo en distintos archivos de acuerdo a la funcionalidad
+
+# Codigo facil de entender
+
+# Funciones con nombres significativos
+
+# Utilizar principalmente C, solo ir a C++ cuando no haya alternativa pero la compilacion debe ser C++
+
+Quiero que desarrolles un Voicebot.
+La idea es que utilices como entrada el microfono para eso utiliza librerias de bajo nivel para capturar la entrada de audio.
+
+Utiliza un VAD para saber cuando cortar una frase, momento en el cual utilizas whisper para convertirlo a texto. Una vez hecho eso se ingesta en un LLM utiliza el modelo de openAI mas rápido.
+
+El VAD debe estar desarrollado en C++ Tambien
