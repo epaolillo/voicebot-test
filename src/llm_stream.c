@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 /* ---- simple dynamic string ---- */
 
@@ -278,15 +279,9 @@ static void build_request_body(DynStr *body, const char *user_text)
 typedef struct {
     llm_sentence_cb cb;
     void           *userdata;
-    DynStr          sentence_buf;
     DynStr          full_response;
     DynStr          line_buf;
 } StreamCtx;
-
-static int is_sentence_end(char c)
-{
-    return c == '.' || c == '!' || c == '?' || c == '\n';
-}
 
 static void replace_single_question_marks(DynStr *s)
 {
@@ -295,7 +290,6 @@ static void replace_single_question_marks(DynStr *s)
 
     for (size_t i = 0; i < s->len; i++) {
         if (s->data[i] == '?') {
-            /* Count consecutive question marks */
             size_t count = 0;
             while (i + count < s->len && s->data[i + count] == '?')
                 count++;
@@ -314,33 +308,9 @@ static void replace_single_question_marks(DynStr *s)
     dynstr_free(&out);
 }
 
-static void flush_sentence(StreamCtx *ctx)
-{
-    if (ctx->sentence_buf.len == 0)
-        return;
-
-    replace_single_question_marks(&ctx->sentence_buf);
-
-    char *start = ctx->sentence_buf.data;
-    while (*start == ' ') start++;
-
-    if (*start != '\0' && ctx->cb)
-        ctx->cb(start, ctx->userdata);
-
-    dynstr_clear(&ctx->sentence_buf);
-}
-
 static void process_content_token(StreamCtx *ctx, const char *token, size_t len)
 {
     dynstr_append(&ctx->full_response, token, len);
-    dynstr_append(&ctx->sentence_buf, token, len);
-
-    for (size_t i = 0; i < len; i++) {
-        if (is_sentence_end(token[i])) {
-            flush_sentence(ctx);
-            break;
-        }
-    }
 }
 
 static void process_sse_line(StreamCtx *ctx, const char *line)
@@ -350,10 +320,8 @@ static void process_sse_line(StreamCtx *ctx, const char *line)
 
     const char *data = line + 6;
 
-    if (strcmp(data, "[DONE]") == 0) {
-        flush_sentence(ctx);
+    if (strcmp(data, "[DONE]") == 0)
         return;
-    }
 
     size_t content_len = 0;
     const char *content = extract_json_content(data, &content_len);
@@ -444,7 +412,6 @@ int llm_stream_chat(const char *user_text, llm_sentence_cb sentence_cb, void *us
     StreamCtx ctx;
     ctx.cb = sentence_cb;
     ctx.userdata = userdata;
-    dynstr_init(&ctx.sentence_buf, 256);
     dynstr_init(&ctx.full_response, 1024);
     dynstr_init(&ctx.line_buf, 512);
 
@@ -455,7 +422,16 @@ int llm_stream_chat(const char *user_text, llm_sentence_cb sentence_cb, void *us
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ctx);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
 
+    struct timespec llm_t0;
+    clock_gettime(CLOCK_MONOTONIC, &llm_t0);
+
     CURLcode res = curl_easy_perform(curl);
+
+    struct timespec llm_t1;
+    clock_gettime(CLOCK_MONOTONIC, &llm_t1);
+    long llm_ms = (llm_t1.tv_sec - llm_t0.tv_sec) * 1000
+                + (llm_t1.tv_nsec - llm_t0.tv_nsec) / 1000000;
+    fprintf(stderr, "\033[1;31m  [TIMER] LLM streaming: %ldms\033[0m\n", llm_ms);
 
     long http_code = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
@@ -466,7 +442,6 @@ int llm_stream_chat(const char *user_text, llm_sentence_cb sentence_cb, void *us
     if (res != CURLE_OK) {
         fprintf(stderr, "[llm] curl error: %s\n", curl_easy_strerror(res));
         dynstr_free(&body);
-        dynstr_free(&ctx.sentence_buf);
         dynstr_free(&ctx.full_response);
         dynstr_free(&ctx.line_buf);
         return -1;
@@ -475,20 +450,27 @@ int llm_stream_chat(const char *user_text, llm_sentence_cb sentence_cb, void *us
     if (http_code != 200) {
         fprintf(stderr, "[llm] HTTP %ld\n", http_code);
         dynstr_free(&body);
-        dynstr_free(&ctx.sentence_buf);
         dynstr_free(&ctx.full_response);
         dynstr_free(&ctx.line_buf);
         return -1;
     }
 
     history_add("user", user_text);
-    if (ctx.full_response.len > 0)
+    if (ctx.full_response.len > 0) {
+        replace_single_question_marks(&ctx.full_response);
+
+        char *start = ctx.full_response.data;
+        while (*start == ' ') start++;
+
+        if (*start != '\0' && sentence_cb)
+            sentence_cb(start, userdata);
+
         history_add("assistant", ctx.full_response.data);
+    }
 
     fprintf(stderr, "[llm] History: %d/%d messages\n", history_count, MAX_HISTORY);
 
     dynstr_free(&body);
-    dynstr_free(&ctx.sentence_buf);
     dynstr_free(&ctx.full_response);
     dynstr_free(&ctx.line_buf);
     return 0;

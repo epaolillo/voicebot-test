@@ -21,9 +21,14 @@
 #define VAD_THRESHOLD_FACTOR 3.0f
 #define VAD_MIN_SPEECH_MS    200
 
-/* Whisper API */
+/* Whisper API (remote) */
 #define WHISPER_API_URL      "https://api.openai.com/v1/audio/transcriptions"
 #define WHISPER_MODEL        "gpt-4o-mini-transcribe"
+
+/* Whisper local (whisper.cpp) */
+#define WHISPER_LOCAL_MODEL   "models/ggml-tiny.bin"
+#define WHISPER_LOCAL_LANGUAGE "es"
+#define WHISPER_LOCAL_THREADS  4
 
 /* LLM settings */
 #define LLM_API_URL          "https://api.openai.com/v1/chat/completions"
@@ -43,6 +48,8 @@
 #define PIPER_MODEL          ""
 #define PIPER_SAMPLE_RATE    22050
 #define PIPER_ESPEAK_DATA    ""
+#define PIPER_LENGTH_SCALE   0.85f
+#define PIPER_SENTENCE_SILENCE 0.0f
 
 /* Audio recording buffer: max 30 seconds at 16kHz */
 #define MAX_RECORDING_SAMPLES (WHISPER_SAMPLE_RATE * 30)

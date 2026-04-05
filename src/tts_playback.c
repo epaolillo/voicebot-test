@@ -7,10 +7,10 @@
 #include <string.h>
 #include <sys/stat.h>
 
-static char piper_bin[512]   = {0};
-static char piper_dir[512]   = {0};
-static char model_path[512]  = {0};
-static char espeak_data[512] = {0};
+static char piper_bin[1024]   = {0};
+static char piper_dir[1024]   = {0};
+static char model_path[1024]  = {0};
+static char espeak_data[1024] = {0};
 static int  sample_rate      = PIPER_SAMPLE_RATE;
 static volatile int speaking = 0;
 
@@ -45,6 +45,8 @@ static int read_sample_rate_from_config(const char *config_path)
     return sr > 0 ? sr : PIPER_SAMPLE_RATE;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
 static int find_first_onnx(const char *dir, char *out, size_t out_size)
 {
     DIR *d = opendir(dir);
@@ -64,10 +66,11 @@ static int find_first_onnx(const char *dir, char *out, size_t out_size)
     closedir(d);
     return -1;
 }
+#pragma GCC diagnostic pop
 
 int tts_auto_discover(const char *base_dir)
 {
-    char path[512];
+    char path[1024];
     int found = 0;
 
     /* Look for piper binary */
@@ -90,7 +93,7 @@ int tts_auto_discover(const char *base_dir)
     if (find_first_onnx(path, model_path, sizeof(model_path)) == 0) {
         found++;
 
-        char config[520];
+        char config[1030];
         snprintf(config, sizeof(config), "%s.json", model_path);
         if (file_exists(config))
             sample_rate = read_sample_rate_from_config(config);
@@ -185,16 +188,20 @@ int tts_speak(const char *text)
 
         n = snprintf(cmd, sizeof(cmd),
             "echo %s | LD_LIBRARY_PATH=%s %s --model %s --config %s.json"
-            " --espeak_data %s --output_raw --quiet 2>/dev/null"
-            " | aplay -r %d -f S16_LE -c 1 -t raw -q 2>/dev/null",
-            escaped_text, escaped_dir, escaped_bin, escaped_model, escaped_model,
-            escaped_espeak, sample_rate);
-    } else {
-        n = snprintf(cmd, sizeof(cmd),
-            "echo %s | LD_LIBRARY_PATH=%s %s --model %s --config %s.json"
+            " --espeak_data %s --length_scale %.2f --sentence_silence %.2f"
             " --output_raw --quiet 2>/dev/null"
             " | aplay -r %d -f S16_LE -c 1 -t raw -q 2>/dev/null",
             escaped_text, escaped_dir, escaped_bin, escaped_model, escaped_model,
+            escaped_espeak, (double)PIPER_LENGTH_SCALE, (double)PIPER_SENTENCE_SILENCE,
+            sample_rate);
+    } else {
+        n = snprintf(cmd, sizeof(cmd),
+            "echo %s | LD_LIBRARY_PATH=%s %s --model %s --config %s.json"
+            " --length_scale %.2f --sentence_silence %.2f"
+            " --output_raw --quiet 2>/dev/null"
+            " | aplay -r %d -f S16_LE -c 1 -t raw -q 2>/dev/null",
+            escaped_text, escaped_dir, escaped_bin, escaped_model, escaped_model,
+            (double)PIPER_LENGTH_SCALE, (double)PIPER_SENTENCE_SILENCE,
             sample_rate);
     }
 

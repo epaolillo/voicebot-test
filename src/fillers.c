@@ -22,10 +22,9 @@ static const int backchannel_count =
     (int)(sizeof(backchannels) / sizeof(backchannels[0]));
 
 static const char *thinking_fillers[] = {
-    "Okey",
-    "Bueno",
-    "Okey",
-    "Sí",
+    "Ooookey",
+    "Bueeeenoooo",
+    "Síiiiii",
 };
 
 static const int thinking_count =
