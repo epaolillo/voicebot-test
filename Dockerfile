@@ -1,9 +1,17 @@
-# Single-stage Alpine image: fetch piper/vendor/models (ignored by git), build voicebot.
-# Target: linux/amd64 — setup.sh downloads Piper's x86_64 glibc binary; gcompat runs it on musl.
+# Single-stage Alpine: build voicebot; Piper + ONNX voices + vendor come from setup.sh (not git).
+# Default image skips the ~1.5GB Whisper GGML blob (TTS API does not need it).
+# Build full assistant image: docker build --build-arg SKIP_WHISPER_MODEL=0 .
+#
+# Target: linux/amd64 — Piper tarball is x86_64 glibc; gcompat runs it on musl.
 
 FROM alpine:3.20
 
 WORKDIR /app
+
+# Extra voices: docker build --build-arg PIPER_VOICE_SPECS="es/es_AR/daniela/high|es_AR-daniela-high"
+ARG SKIP_WHISPER_MODEL=1
+ARG PIPER_VOICE_SPECS=
+ENV SKIP_WHISPER_MODEL=${SKIP_WHISPER_MODEL}
 
 COPY Makefile setup.sh ./
 COPY src/ ./src/

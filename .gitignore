@@ -3,6 +3,10 @@ dist/
 vendor/
 piper/
 
+# Large binaries — fetch with ./setup.sh or Docker build (see Dockerfile)
+models/*.onnx
+models/*.bin
+
 *.o
 *.tar.gz
 .env

@@ -1,0 +1,11 @@
+# Match .gitignore — large artifacts fetched in-container by setup.sh
+build/
+dist/
+vendor/
+piper/
+models/*.onnx
+models/*.bin
+*.o
+*.tar.gz
+.env
+.git
