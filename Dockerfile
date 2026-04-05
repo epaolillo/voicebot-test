@@ -3,12 +3,14 @@
 # Build full assistant image: docker build --build-arg SKIP_WHISPER_MODEL=0 .
 #
 # Target: linux/amd64 — Piper tarball is x86_64 glibc; gcompat runs it on musl.
+#
+# Runtime libraries are installed first, then a virtual ".build-deps" bundle; removing the
+# virtual package avoids apk del failing on dependency edges (common cause of exit code 2).
 
 FROM alpine:3.20
 
 WORKDIR /app
 
-# Extra voices: docker build --build-arg PIPER_VOICE_SPECS="es/es_AR/daniela/high|es_AR-daniela-high"
 ARG SKIP_WHISPER_MODEL=1
 ARG PIPER_VOICE_SPECS=
 ENV SKIP_WHISPER_MODEL=${SKIP_WHISPER_MODEL}
@@ -18,11 +20,19 @@ COPY src/ ./src/
 
 RUN set -eux; \
     apk add --no-cache \
+        ca-certificates \
+        gcompat \
+        libstdc++ \
+        libgcc \
+        alsa-lib \
+        libcurl \
+        libmicrohttpd \
+    ; \
+    apk add --no-cache --virtual .build-deps \
         bash \
         coreutils \
         curl \
         wget \
-        ca-certificates \
         git \
         build-base \
         cmake \
@@ -34,30 +44,9 @@ RUN set -eux; \
     ; \
     chmod +x setup.sh; \
     ./setup.sh; \
-    make -j"$(nproc)"; \
-    apk del --purge --no-cache \
-        bash \
-        coreutils \
-        git \
-        wget \
-        build-base \
-        cmake \
-        pkgconf \
-        make \
-        alsa-lib-dev \
-        curl-dev \
-        libmicrohttpd-dev \
-    ; \
-    apk add --no-cache \
-        libstdc++ \
-        libgcc \
-        gcompat \
-        alsa-lib \
-        curl \
-        libmicrohttpd \
-        ca-certificates \
-    ; \
-    rm -rf /tmp/* /root/.cache
+    make -j"$(nproc)" RNNOISE_CPUFLAGS="-mtune=generic"; \
+    apk del .build-deps; \
+    rm -rf /root/.cache
 
 EXPOSE 8080
 

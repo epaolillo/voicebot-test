@@ -18,6 +18,10 @@ BUILDDIR= build
 # --- whisper.cpp ---
 WHISPER_DIR   = vendor/whisper.cpp
 WHISPER_BUILD = $(WHISPER_DIR)/build
+WHISPER_LINK  = $(WHISPER_BUILD)/src/libwhisper.a \
+                $(WHISPER_BUILD)/ggml/src/libggml.a \
+                $(WHISPER_BUILD)/ggml/src/libggml-cpu.a \
+                $(WHISPER_BUILD)/ggml/src/libggml-base.a
 
 CXXFLAGS += -I$(WHISPER_DIR)/include -I$(WHISPER_DIR)/ggml/include
 
@@ -58,9 +62,16 @@ OBJS    = $(C_OBJS) $(CXX_OBJS) $(RNNOISE_OBJS)
 
 TARGET  = $(BUILDDIR)/voicebot
 
+# RNNoise: default -march=native for local CPU; override for Docker (e.g. RNNOISE_CPUFLAGS=-mtune=generic).
+RNNOISE_CPUFLAGS ?= -march=native
+
 .PHONY: all clean whisper
 
-all: whisper $(TARGET)
+all: $(TARGET)
+
+# One representative file; `make whisper` produces all static libs. CMakeLists keeps rule from always firing.
+$(WHISPER_BUILD)/src/libwhisper.a: $(WHISPER_DIR)/CMakeLists.txt
+	@$(MAKE) whisper
 
 whisper:
 	@if [ ! -f "$(WHISPER_BUILD)/src/libwhisper.a" ]; then \
@@ -80,12 +91,7 @@ whisper:
 		echo "=== whisper.cpp already built ===" ; \
 	fi
 
-WHISPER_LINK = $(WHISPER_BUILD)/src/libwhisper.a \
-              $(WHISPER_BUILD)/ggml/src/libggml.a \
-              $(WHISPER_BUILD)/ggml/src/libggml-cpu.a \
-              $(WHISPER_BUILD)/ggml/src/libggml-base.a
-
-$(TARGET): $(OBJS)
+$(TARGET): $(OBJS) $(WHISPER_BUILD)/src/libwhisper.a
 	$(CXX) $(CXXFLAGS) -o $@ $(OBJS) $(WHISPER_LINK) $(LDFLAGS)
 
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c | $(BUILDDIR)
@@ -95,7 +101,7 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.cpp | $(BUILDDIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 $(BUILDDIR)/rnnoise_%.o: $(RNNOISE_DIR)/%.c | $(BUILDDIR)
-	$(CC) -O2 -march=native -I$(RNNOISE_DIR) -Ivendor/rnnoise/include -DCOMPILE_OPUS -c -o $@ $<
+	$(CC) -O2 $(RNNOISE_CPUFLAGS) -I$(RNNOISE_DIR) -Ivendor/rnnoise/include -DCOMPILE_OPUS -c -o $@ $<
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
