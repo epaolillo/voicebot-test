@@ -140,6 +140,26 @@ int tts_get_sample_rate(void)
     return sample_rate;
 }
 
+const char *tts_get_piper_bin(void)
+{
+    return piper_bin;
+}
+
+const char *tts_get_piper_dir(void)
+{
+    return piper_dir;
+}
+
+const char *tts_get_espeak_data(void)
+{
+    return espeak_data;
+}
+
+const char *tts_get_model_path(void)
+{
+    return model_path;
+}
+
 static void shell_escape(char *out, size_t out_size, const char *in)
 {
     size_t pos = 0;

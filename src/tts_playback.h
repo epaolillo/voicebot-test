@@ -36,6 +36,13 @@ int tts_is_speaking(void);
  */
 int tts_get_sample_rate(void);
 
+/** Paths after tts_auto_discover (for API / synthesis). May return "". */
+const char *tts_get_piper_bin(void);
+const char *tts_get_piper_dir(void);
+const char *tts_get_espeak_data(void);
+/** Full path to the first discovered .onnx model. */
+const char *tts_get_model_path(void);
+
 #ifdef __cplusplus
 }
 #endif

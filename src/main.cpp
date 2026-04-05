@@ -22,6 +22,7 @@ extern "C" {
 #include "tts_playback.h"
 #include "fillers.h"
 #include "config.h"
+#include "tts_api_server.h"
 }
 
 static volatile sig_atomic_t running = 1;
@@ -172,19 +173,36 @@ static void print_usage(const char *prog)
 {
     fprintf(stderr,
         "Usage: %s --openai <key> --company <name> --name <first> --lastname <last>\n"
+        "   or: %s --api [--listen HOST:PORT|PORT] [--api-key <secret>]\n"
         "\n"
-        "Required:\n"
+        "Voice assistant (required):\n"
         "  --openai <key>       OpenAI API key (always needed for LLM)\n"
         "  --company <name>     Company name for greeting\n"
         "  --name <first>       Caller's first name\n"
         "  --lastname <last>    Caller's last name\n"
         "\n"
-        "Optional:\n"
+        "Voice assistant (optional):\n"
         "  --whisper-local [path]  Use local whisper.cpp STT (default: %s)\n"
         "  --fillers              Enable thinking/backchannel fillers\n"
         "  --autolistening        Keep mic active during TTS playback\n"
+        "\n"
+        "TTS API mode (OpenAI-compatible, Piper only):\n"
+        "  --api                  HTTP server: GET /v1/models, POST /v1/audio/speech\n"
+        "  --listen <host:port|port>  Bind address (default port %d)\n"
+        "  --api-key <secret>     Require Authorization: Bearer <secret>\n"
+        "\n"
         "  --help                 Show this help\n",
-        prog, WHISPER_LOCAL_MODEL);
+        prog, prog, WHISPER_LOCAL_MODEL, TTS_API_DEFAULT_PORT);
+}
+
+static int parse_listen_port(const char *s)
+{
+    if (!s || !s[0])
+        return TTS_API_DEFAULT_PORT;
+    const char *colon = strrchr(s, ':');
+    if (colon && colon[1])
+        return atoi(colon + 1);
+    return atoi(s);
 }
 
 /* ---- Main ---- */
@@ -196,12 +214,21 @@ int main(int argc, char *argv[])
     const char *name          = nullptr;
     const char *lastname      = nullptr;
     const char *whisper_model = nullptr;
+    const char *listen_arg    = nullptr;
+    const char *api_key       = nullptr;
     int use_whisper_local     = 0;
     int use_fillers           = 0;
     int autolistening         = DEFAULT_AUTOLISTENING;
+    int api_mode              = 0;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--openai") == 0 && i + 1 < argc) {
+        if (strcmp(argv[i], "--api") == 0) {
+            api_mode = 1;
+        } else if (strcmp(argv[i], "--listen") == 0 && i + 1 < argc) {
+            listen_arg = argv[++i];
+        } else if (strcmp(argv[i], "--api-key") == 0 && i + 1 < argc) {
+            api_key = argv[++i];
+        } else if (strcmp(argv[i], "--openai") == 0 && i + 1 < argc) {
             openai_key = argv[++i];
         } else if (strcmp(argv[i], "--company") == 0 && i + 1 < argc) {
             company = argv[++i];
@@ -225,6 +252,27 @@ int main(int argc, char *argv[])
             print_usage(argv[0]);
             return 1;
         }
+    }
+
+    if (api_mode) {
+        signal(SIGINT, signal_handler);
+        signal(SIGTERM, signal_handler);
+
+        char project_dir[PATH_MAX];
+        resolve_project_dir(project_dir, sizeof(project_dir));
+
+        int port = parse_listen_port(listen_arg ? listen_arg : "");
+        if (port <= 0 || port > 65535) {
+            fprintf(stderr, "Invalid --listen port\n");
+            return 1;
+        }
+
+        fprintf(stderr, "=== Piper TTS API (OpenAI-compatible) ===\n");
+        if (run_tts_api_server(project_dir, port, api_key) != 0) {
+            fprintf(stderr, "Failed to start API server (install libmicrohttpd-dev?)\n");
+            return 1;
+        }
+        return 0;
     }
 
     if (!openai_key || !company || !name || !lastname) {

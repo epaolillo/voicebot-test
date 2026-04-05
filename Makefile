@@ -2,7 +2,15 @@ CC      = gcc
 CXX     = g++
 CFLAGS  = -O2 -Wall -Wextra -Isrc -Ivendor/rnnoise/include
 CXXFLAGS= -O2 -Wall -Wextra -std=c++17 -Isrc -Ivendor/rnnoise/include
-LDFLAGS = -lasound -lcurl -lm -lstdc++ -lpthread
+MHD_CPPFLAGS := $(shell pkg-config --cflags libmicrohttpd 2>/dev/null)
+ifneq ($(strip $(MHD_CPPFLAGS)),)
+CXXFLAGS += $(MHD_CPPFLAGS)
+endif
+MHD_LIBS := $(shell pkg-config --libs libmicrohttpd 2>/dev/null)
+ifeq ($(strip $(MHD_LIBS)),)
+MHD_LIBS = -lmicrohttpd
+endif
+LDFLAGS = -lasound -lcurl -lm -lstdc++ -lpthread $(MHD_LIBS)
 
 SRCDIR  = src
 BUILDDIR= build
@@ -36,10 +44,13 @@ C_SRCS  = $(SRCDIR)/env_loader.c \
           $(SRCDIR)/whisper_api.c \
           $(SRCDIR)/llm_stream.c \
           $(SRCDIR)/tts_playback.c \
+          $(SRCDIR)/tts_models.c \
+          $(SRCDIR)/tts_synthesize.c \
           $(SRCDIR)/fillers.c
 
 CXX_SRCS= $(SRCDIR)/main.cpp \
-          $(SRCDIR)/whisper_local.cpp
+          $(SRCDIR)/whisper_local.cpp \
+          $(SRCDIR)/tts_api_server.cpp
 
 C_OBJS  = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(C_SRCS))
 CXX_OBJS= $(patsubst $(SRCDIR)/%.cpp,$(BUILDDIR)/%.o,$(CXX_SRCS))

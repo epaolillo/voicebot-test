@@ -64,4 +64,7 @@
 /* Pause before thinking fillers (ms) to let Whisper/LLM start processing */
 #define FILLER_DELAY_MS 700
 
+/* OpenAI-compatible TTS HTTP API (--api) */
+#define TTS_API_DEFAULT_PORT 8080
+
 #endif /* CONFIG_H */
