@@ -1,52 +1,56 @@
-# Single-stage Alpine: build voicebot; Piper + ONNX voices + vendor come from setup.sh (not git).
-# Default image skips the ~1.5GB Whisper GGML blob (TTS API does not need it).
-# Build full assistant image: docker build --build-arg SKIP_WHISPER_MODEL=0 .
+# Single-stage image: build voicebot; Piper + ONNX + vendor from setup.sh (not git).
+# Default: skip Whisper GGML (~1.5GB). Full: docker build --build-arg SKIP_WHISPER_MODEL=0 .
 #
-# Target: linux/amd64 — Piper tarball is x86_64 glibc; gcompat runs it on musl.
-#
-# Runtime libraries are installed first, then a virtual ".build-deps" bundle; removing the
-# virtual package avoids apk del failing on dependency edges (common cause of exit code 2).
+# Base: Debian bookworm-slim (glibc). The official Piper tarball is built for glibc Linux;
+# Alpine + gcompat often yields broken or silent synthesis — use Debian for reliable TTS.
 
-FROM alpine:3.20
+FROM debian:bookworm-slim
 
-WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
 
 ARG SKIP_WHISPER_MODEL=1
 ARG PIPER_VOICE_SPECS=
 ENV SKIP_WHISPER_MODEL=${SKIP_WHISPER_MODEL}
+ENV PIPER_VOICE_SPECS=${PIPER_VOICE_SPECS}
+
+WORKDIR /app
 
 COPY Makefile setup.sh ./
 COPY src/ ./src/
 
 RUN set -eux; \
-    apk add --no-cache \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
         ca-certificates \
-        gcompat \
-        libstdc++ \
-        libgcc \
-        alsa-lib \
-        libcurl \
-        libmicrohttpd \
-    ; \
-    apk add --no-cache --virtual .build-deps \
-        bash \
-        coreutils \
         curl \
         wget \
         git \
-        build-base \
+        bash \
+        build-essential \
         cmake \
-        pkgconf \
-        make \
-        alsa-lib-dev \
-        curl-dev \
+        pkg-config \
+        libasound2-dev \
+        libcurl4-openssl-dev \
         libmicrohttpd-dev \
     ; \
     chmod +x setup.sh; \
     ./setup.sh; \
     make -j"$(nproc)" RNNOISE_CPUFLAGS="-mtune=generic"; \
-    apk del .build-deps; \
-    rm -rf /root/.cache
+    apt-get purge -y \
+        build-essential \
+        cmake \
+        pkg-config \
+        libasound2-dev \
+        libcurl4-openssl-dev \
+        libmicrohttpd-dev \
+    ; \
+    apt-get autoremove -y; \
+    apt-get install -y --no-install-recommends \
+        libasound2 \
+        libcurl4 \
+        libmicrohttpd12 \
+    ; \
+    rm -rf /var/lib/apt/lists/* /root/.cache
 
 EXPOSE 8080
 
